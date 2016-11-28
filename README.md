@@ -1,14 +1,11 @@
 # Matchmaker Exchange Reference Server
-[![Build Status](https://api.travis-ci.org/MatchmakerExchange/reference-server.svg)](https://travis-ci.org/MatchmakerExchange/reference-server)
-[![License](https://img.shields.io/github/license/MatchmakerExchange/reference-server.svg)](LICENSE.txt)
-[![Coverage Status](https://img.shields.io/coveralls/MatchmakerExchange/reference-server/master.svg)](https://coveralls.io/github/MatchmakerExchange/reference-server?branch=master)
+<!-- [![Build Status](https://api.travis-ci.org/MatchmakerExchange/exchange-server.svg)](https://travis-ci.org/MatchmakerExchange/exchange-server) -->
+[![License](https://img.shields.io/github/license/MatchmakerExchange/exchange-server.svg)](LICENSE.txt)
+<!-- [![Coverage Status](https://img.shields.io/coveralls/MatchmakerExchange/exchange-server/master.svg)](https://coveralls.io/github/MatchmakerExchange/exchange-server?branch=master) -->
 
-A simple server that stores patient records and implements the [Matchmaker Exchange API](https://github.com/ga4gh/mme-apis).
+An exchange server (built on top of the [MME Reference Server](https://github.com/MatchmakerExchange/reference-server)) that proxies requests from one MME service to one or more other MME services over the [Matchmaker Exchange API](https://github.com/ga4gh/mme-apis).
 
-This is an example implementation, written by the [Matchmaker Exchange](http://www.matchmakerexchange.org/) technical team. The server uses a single elasticsearch instance to index the patient records, the [Human Phenotype Ontology](http://human-phenotype-ontology.github.io/), and Ensembl-Entrez-HGNC gene symbol mappings. By default, you can load the MME API benchmark dataset of 50 rare disease patient records compiled from the literature ([see the publication for more details](http://onlinelibrary.wiley.com/doi/10.1002/humu.22850)).
-
-This code is intended to be illustrative and is **not** guaranteed to perform well in a production setting.
-
+## Not yet functional
 
 ## Dependencies
 - Python 2.7 or 3.3+
@@ -20,14 +17,14 @@ This code is intended to be illustrative and is **not** guaranteed to perform we
 1. Clone the repository:
 
     ```sh
-    git clone https://github.com/MatchmakerExchange/reference-server.git
-    cd reference-server
+    git clone https://github.com/MatchmakerExchange/exchange-server.git
+    cd exchange-server
     ```
 
 1. Install the Python package dependencies (it's recommended that you do this inside a [Python virtual environment](#install-venv)):
 
     ```sh
-    pip install -e .
+    pip install -r requirements.txt
     ```
 
 1. Start up your elasticsearch server in another shell (see the [ElasticSearch instructions](#install-es) for more information).
@@ -42,19 +39,11 @@ This code is intended to be illustrative and is **not** guaranteed to perform we
     mme-server quickstart
     ```
 
-1. Run tests:
+1. Start up exchange server:
 
     ```sh
-    mme-server test
+    python manage.py
     ```
-
-1. Start up MME reference server:
-
-    ```sh
-    mme-server start
-    ```
-
-    By default, the server listens globally (`--host 0.0.0.0`) on port 8000 (`--port 8000`).
 
 1. Try it out:
 
@@ -102,34 +91,6 @@ Then, start up a local elasticsearch cluster to serve as our database (`-Des.pat
 ```sh
 ./elasticsearch-2.1.1/bin/elasticsearch -Des.path.data=data
 ```
-
-
-
-## Loading custom patient data
-
-Custom patient data can be indexed by the server in two ways (if a patient 'id' matches an existing patient, the existing patient is updated):
-
-1. Batch index from the command line:
-    ```sh
-    mme-server index patients --filename patients.json
-    ```
-
-1. Batch index from the Python interface:
-
-    ```py
-    >>> from mme_server.models import DatastoreConnection
-    >>> db = DatastoreConnection()
-    >>> db.patients.index('/path/to/patients.json')
-    ```
-
-1. Single patient index the Python interface:
-
-    ```py
-    >>> from mme_server.models import Patient, DatastoreConnection
-    >>> db = DatastoreConnection()
-    >>> patient = Patient.from_api({...})
-    >>> db.patients.index_patient(patient)
-    ```
 
 
 ## Questions
