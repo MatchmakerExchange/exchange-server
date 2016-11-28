@@ -1,0 +1,1 @@
+-e git+https://github.com/MatchmakerExchange/reference-server.git@1e888e4a76f9caf32e8269a97e34be2600531bf0#egg=mme_server
