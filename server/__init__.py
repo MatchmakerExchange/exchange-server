@@ -5,6 +5,7 @@ import json
 
 from flask import after_this_request, jsonify, render_template, request
 from flask_negotiate import consumes, produces
+from werkzeug.exceptions import BadRequest
 
 from mme_server.server import app, API_MIME_TYPE, authenticate_request, get_backend, InvalidXAuthToken, MatchRequest, ValidationError, validate_request, validate_response
 
@@ -120,7 +121,7 @@ def match_server(server_id):
     try:
         logger.info("Getting flask request data")
         request_json = request.get_json(force=True)
-    except:
+    except BadRequest:
         error = jsonify(message='Invalid request JSON')
         error.status_code = 400
         return error
