@@ -7,7 +7,8 @@ from flask import after_this_request, jsonify, render_template, request
 from flask_negotiate import consumes, produces
 from werkzeug.exceptions import BadRequest
 
-from mme_server.server import app, API_MIME_TYPE, authenticate_request, get_backend, InvalidXAuthToken, MatchRequest, ValidationError, validate_request, validate_response
+from mme_server.server import app, API_MIME_TYPE, authenticate_request, get_backend, InvalidXAuthToken, ValidationError, validate_request, validate_response
+from mme_server.models import MatchRequest, MatchResponse
 
 from .compat import urlopen, Request
 
@@ -53,8 +54,24 @@ def send_request(server, request_data, timeout):
     print("Loading response")
     response = handler.read().decode('utf-8')
     response_json = json.loads(response)
-    print("Loaded response: {!r}".format(response_json))
-    return response_json
+
+    logger.info("Validating response syntax")
+    try:
+        validate_response(response_json)
+    except ValidationError as e:
+        # log to console and return response anyway
+        logger.error('Response does not conform to API specification:\n{}'.format(e))
+
+    try:
+        logger.info("Normalizing response")
+        response_obj = MatchResponse.from_api(response_json)
+        response_api = response_obj.to_api()
+    except:
+        # log to console and return raw response
+        logger.error('Error normalizing response:\n{}'.format(e))
+        response_api = response_json
+
+    return response_api
 
 
 def proxy_request(request_data, timeout=5, server_ids=None):
@@ -111,7 +128,7 @@ def match_server(server_id):
         return response
 
     try:
-        authenticate_request(request)
+        server = authenticate_request(request)
     except InvalidXAuthToken:
         error = jsonify(message='X-Auth-Token not authorized')
         error.status_code = 401
@@ -138,6 +155,9 @@ def match_server(server_id):
 
     logger.info("Parsing query")
     request_obj = MatchRequest.from_api(request_json).to_api()
+    request_obj['request'] = {
+        'server_id': server['server_id']
+    }
 
     try:
         validate_request(request_obj)
@@ -153,14 +173,8 @@ def match_server(server_id):
     logger.info(json.dumps(request_obj, indent=4))
     server_responses = proxy_request(request_data, timeout=timeout, server_ids=[server_id])
 
-    logger.info("Received response: {}".format(json.dumps(server_responses)))
-    response_json = server_responses[0][1]
-    logger.info("Validating response syntax")
-    try:
-        validate_response(response_json)
-    except ValidationError as e:
-        # log to console and return response anyway
-        logger.error('Response does not conform to API specification:\n{}'.format(e))
-        print(type(response_json['results'][0]['patient']))
-
-    return jsonify(response_json)
+    server, response = server_responses[0]
+    response['response'] = {
+        'server_id': server['server_id']
+    }
+    return jsonify(response)
