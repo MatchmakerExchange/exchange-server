@@ -1,14 +1,21 @@
 import os
 
+import logging
+import json
+
+from flask import after_this_request, jsonify, render_template, request
 from flask_negotiate import consumes, produces
 
-from mme_server.server import app, API_MIME_TYPE, authenticate_request
+from mme_server.server import app, API_MIME_TYPE, authenticate_request, get_backend, InvalidXAuthToken, MatchRequest, ValidationError, validate_request, validate_response
 
+from .compat import urlopen, Request
+
+logger = logging.getLogger(__name__)
 
 # Default to development configuration
 app_settings = os.getenv('APP_SETTINGS', 'config.dev.Config')
 app.config.from_object(app_settings)
-
+app.template_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
 
 def get_outgoing_servers():
     db = get_backend()
@@ -20,6 +27,32 @@ def get_outgoing_servers():
             servers[server_id] = server
 
     return servers
+
+
+def send_request(server, request_data, timeout):
+    base_url = server['base_url']
+    assert base_url.startswith('https://')
+
+    url = '{}/match'.format(base_url)
+    headers = {
+        'User-Agent': 'mme-server/0.2',
+        'Content-Type': API_MIME_TYPE,
+        'Accept': API_MIME_TYPE,
+    }
+
+    auth_token = server.get('server_key')
+    if auth_token:
+        headers['X-Auth-Token'] = auth_token
+
+    print("Opening request to URL: " + url)
+    print("Sending request: " + request_data.decode())
+    req = Request(url, data=request_data, headers=headers)
+    handler = urlopen(req)
+    print("Loading response")
+    response = handler.read().decode('utf-8')
+    response_json = json.loads(response)
+    print("Loaded response: {!r}".format(response_json))
+    return response_json
 
 
 def proxy_request(request_data, timeout=5, server_ids=None):
@@ -87,7 +120,7 @@ def match_server(server_id):
     try:
         logger.info("Getting flask request data")
         request_json = request.get_json(force=True)
-    except BadRequest:
+    except:
         error = jsonify(message='Invalid request JSON')
         error.status_code = 400
         return error
@@ -119,7 +152,8 @@ def match_server(server_id):
     logger.info("Proxying request")
     logger.info(json.dumps(request_obj, indent=4))
     server_responses = proxy_request(request_data, timeout=timeout, server_ids=[server_id])
-    
+
+    logger.info("Received response: {}".format(json.dumps(server_responses)))
     response_json = server_responses[0][1]
     logger.info("Validating response syntax")
     try:
