@@ -3,12 +3,14 @@ import os
 import logging
 import json
 
-from flask import after_this_request, jsonify, render_template, request
+from flask import after_this_request, g, jsonify, render_template, request
 from flask_negotiate import consumes, produces
 from werkzeug.exceptions import BadRequest
 
-from mme_server.server import app, API_MIME_TYPE, authenticate_request, get_backend, InvalidXAuthToken, ValidationError, validate_request, validate_response
+from mme_server.decorators import auth_token_required
+from mme_server.server import app, API_MIME_TYPE, get_backend
 from mme_server.models import MatchRequest, MatchResponse
+from mme_server.schemas import validate_request, validate_response, ValidationError
 
 from .compat import urlopen, Request
 
@@ -18,7 +20,6 @@ logger = logging.getLogger(__name__)
 app_settings = os.getenv('APP_SETTINGS', 'config.dev.Config')
 app.config.from_object(app_settings)
 app.template_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
-
 
 def get_connected_servers():
     db = get_backend()
@@ -72,6 +73,11 @@ def send_request(server, request_data, timeout):
         logger.error('Error normalizing response:\n{}'.format(e))
         response_api = response_json
 
+    # Inject server information
+    response_api['_server'] = {
+        'id': server.get('server_id'),
+        'baseUrl': server.get('base_url')
+    }
     return response_api
 
 
@@ -120,6 +126,7 @@ def index():
 @app.route('/v1/servers/<server_id>/match', methods=['POST'])
 @consumes(API_MIME_TYPE, 'application/json')
 @produces(API_MIME_TYPE)
+@auth_token_required()
 def match_server(server_id):
     """Proxy the match request to server <server>"""
 
@@ -127,13 +134,6 @@ def match_server(server_id):
     def add_header(response):
         response.headers['Content-Type'] = API_MIME_TYPE
         return response
-
-    try:
-        server = authenticate_request(request)
-    except InvalidXAuthToken:
-        error = jsonify(message='X-Auth-Token not authorized')
-        error.status_code = 401
-        return error
 
     timeout = int(request.args.get('timeout', 10))
 
@@ -156,9 +156,13 @@ def match_server(server_id):
 
     logger.info("Parsing query")
     request_obj = MatchRequest.from_api(request_json).to_api()
-    request_obj['request'] = {
-        'server_id': server['server_id']
-    }
+
+    # Inject server data into request
+    request_server = g.get('server')
+    if request_server:
+        request_obj['_server'] = {
+            'server_id': request_server['server_id']
+        }
 
     try:
         validate_request(request_obj)
@@ -176,7 +180,7 @@ def match_server(server_id):
     server_responses = proxy_request(request_data, timeout=timeout, server_ids=[server_id])
 
     server, response = server_responses[0]
-    response['response'] = {
-        'server_id': server['server_id']
-    }
+    # Inject request data into response
+    response['request'] = request_obj
+
     return jsonify(response)
