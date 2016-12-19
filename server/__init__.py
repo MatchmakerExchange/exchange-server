@@ -18,6 +18,7 @@ app_settings = os.getenv('APP_SETTINGS', 'config.dev.Config')
 app.config.from_object(app_settings)
 app.template_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
 
+
 def get_outgoing_servers():
     db = get_backend()
     response = db.servers.list()
@@ -131,7 +132,6 @@ def match_server(server_id):
         validate_request(request_json)
     except ValidationError as e:
         error = jsonify(message='Request does not conform to API specification',
-                        error=e,
                         request=request_json)
         error.status_code = 422
         return error
@@ -142,8 +142,7 @@ def match_server(server_id):
     try:
         validate_request(request_obj)
     except ValidationError as e:
-        error = jsonify(message='Created request does not conform to API specification',
-                           error=e)
+        error = jsonify(message='Created request does not conform to API specification')
         error.status_code = 422
         return error
 
