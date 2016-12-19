@@ -2,32 +2,7 @@
 
 import os
 
-# from flask.ext.script import Manager
-
 from mme_server.server import app
-
-# manager = Manager(app)
-
-# @manager.option(dest='token', metavar="SERVER_TOKEN", help="The server token required for creating users and their auth_tokens")
-# @manager.option(dest='name', metavar="SERVER_NAME", help="The server's name")
-# @manager.option(dest='id', metavar="SERVER_ID", help="The server identifier")
-# def authorize_server(id, name, token):
-#     """Authorize a server to connect to the API"""
-#     server = Server(server_id=id, server_name=name, server_token=token)
-#     try:
-#         db.session.add(server)
-#         db.session.commit()
-#     except IntegrityError:
-#         db.session.rollback()
-#         app.logger.error('Server authentication token already in use')
-
-
-# @manager.command
-# def test():
-#     import unittest
-#     tests = unittest.TestLoader().discover('tests')
-#     unittest.TextTestRunner(verbosity=2).run(tests)
-
 
 if __name__ == '__main__':
     app.run()

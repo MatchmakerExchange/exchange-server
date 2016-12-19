@@ -20,5 +20,3 @@ def application(environ, start_response):
     _application.logger.addHandler(log_handler)
 
     return _application(environ, start_response)
-
-print("Don't stop... believing")
