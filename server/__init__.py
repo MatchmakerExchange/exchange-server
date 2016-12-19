@@ -20,7 +20,7 @@ app.config.from_object(app_settings)
 app.template_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
 
 
-def get_outgoing_servers():
+def get_connected_servers():
     db = get_backend()
     response = db.servers.list()
     servers = {}
@@ -51,6 +51,7 @@ def send_request(server, request_data, timeout):
     print("Sending request: " + request_data.decode())
     req = Request(url, data=request_data, headers=headers)
     handler = urlopen(req)
+
     print("Loading response")
     response = handler.read().decode('utf-8')
     response_json = json.loads(response)
@@ -112,7 +113,7 @@ def proxy_request(request_data, timeout=5, server_ids=None):
 @app.route('/', methods=['GET'])
 @produces('text/html')
 def index():
-    servers = get_outgoing_servers()
+    servers = get_connected_servers()
     return render_template('index.html', servers=servers)
 
 
@@ -134,7 +135,7 @@ def match_server(server_id):
         error.status_code = 401
         return error
 
-    timeout = int(request.args.get('timeout', 5))
+    timeout = int(request.args.get('timeout', 10))
 
     try:
         logger.info("Getting flask request data")
@@ -163,6 +164,7 @@ def match_server(server_id):
         validate_request(request_obj)
     except ValidationError as e:
         error = jsonify(message='Created request does not conform to API specification')
+        print(request_obj)
         error.status_code = 422
         return error
 
