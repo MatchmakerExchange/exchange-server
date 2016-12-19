@@ -69,10 +69,10 @@ def proxy_request(request_data, timeout=5, server_ids=None):
             (not server_ids or server['server_id'] in server_ids)):
             servers.append(server)
 
+    handles = []
     if servers:
         pool = Pool(processes=4)
 
-        handles = []
         for server in servers:
             handle = pool.apply_async(send_request, (server, request_data, timeout))
             handles.append((server, handle))
