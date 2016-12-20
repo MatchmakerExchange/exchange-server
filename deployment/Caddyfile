@@ -1,0 +1,4 @@
+https://x.matchmakerexchange.org
+proxy / localhost:8008
+log stdout
+errors stderr

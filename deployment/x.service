@@ -1,0 +1,13 @@
+[Unit]
+Description=Gunicorn instance to serve MME exchange server
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/exchange-server
+Environment="PATH=/var/www/exchange-server/.virtualenv/bin"
+ExecStart=/var/www/exchange-server/.virtualenv/bin/gunicorn --workers 3 --bind localhost:8008 -m 007 wsgi:app
+
+[Install]
+WantedBy=multi-user.target
