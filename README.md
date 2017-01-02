@@ -9,7 +9,7 @@ An exchange server (built on top of the [MME Reference Server](https://github.co
 ## Dependencies
 
 - Python 2.7 or 3.3+
-- ElasticSearch 1.7 (to match Travis-CI)
+- ElasticSearch 2.x
 
 
 ## Quickstart
@@ -32,8 +32,11 @@ An exchange server (built on top of the [MME Reference Server](https://github.co
 1. Authenticate a server to receive proxied requests:
 
     ```sh
-    mme-server auth add phenomecentral out  --label "PhenomeCentral" --base-url "https://phenomecentral.org/rest/remoteMatcher" --key <PC_AUTH_TOKEN>
+    mme-server auth add phenomecentral out  --label "PhenomeCentral" \
+        --base-url "https://phenomecentral.org/rest/remoteMatcher" --key <PC_AUTH_TOKEN>
     ```
+    
+    *Pro-tip: If you don't specify a `--key`, a random one will be generated*
 
 1. Authenticate a client to send proxied requests:
 
@@ -41,7 +44,9 @@ An exchange server (built on top of the [MME Reference Server](https://github.co
     mme-server auth add client_server in  --label "My Client" --key "<CLIENT_AUTH_TOKEN>"
     ```
 
-1. Start up exchange server:
+    *Pro-tip: If you don't specify a `--key`, a random one will be generated*
+
+1. Start up the exchange server:
 
     ```sh
     python manage.py
@@ -74,8 +79,3 @@ If you have any questions, feel free to post an issue on GitHub.
 This repository is managed by the Matchmaker Exchange technical team. You can reach us via GitHub or by [email](mailto:api@matchmakerexchange.org).
 
 Contributions are most welcome! Post an issue, submit a bugfix, or just try it out. We hope you find it useful.
-
-
-## Implementations
-
-We don't know of any organizations using this code in a production setting just yet. If you are, please let us know! We'd love to list you here.
