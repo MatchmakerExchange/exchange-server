@@ -42,10 +42,12 @@
                                 <li>resolves HPO synonyms</li>
                             </ul>
                         <li>Enables new services to be queried by the entire MME with only a single key exchange</li>
+                        <li>Community-driven analytics</li>
                     </ol>
                 </div>
             </div>
         </section>
+
         <section class="row col-sm-10 col-sm-offset-1 col-md-8 col-md-offset-2">
             <h2 class="text-center">Connected Servers</h2>
             <div class="panel panel-default">
@@ -64,10 +66,10 @@
                     </tr>
                     </thead>
                     <tbody>
-                    {% for id, server in servers|dictsort %}
+                    {% for server in servers|sort(attribute='server_id') %}
                     <tr>
                         <td>{{ loop.index }}</td>
-                        <td>{{ id }}</td>
+                        <td>{{ server.server_id }}</td>
                         <td>{{ server.server_label }}</td>
                         <td>{{ server.base_url }}</td>
                     </tr>
@@ -100,6 +102,36 @@ curl -X POST \
     https://x.matchmakerexchange.org/v1/servers/phenomecentral/match
                     </pre>
                 </div>
+            </div>
+        </section>
+
+        <section class="row col-sm-10 col-sm-offset-1 col-md-8 col-md-offset-2">
+            <h2 class="text-center">Most Recent Requests</h2>
+            <div class="panel panel-default">
+                <table class="table table-striped">
+                    <thead>
+                    <tr>
+                        <th>From</th>
+                        <th>To</th>
+                        <th>Status</th>
+                        <th># matches</th>
+                        <th>Took (ms)</th>
+                        <th>Timestamp</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for request in recent_requests %}
+                    <tr>
+                        <td>{{ request.sender_id }}</td>
+                        <td>{{ request.receiver_id }}</td>
+                        <td>{{ request.status }}</td>
+                        <td>{{ request.response_patient_ids|length }}</td>
+                        <td>{{ (request.took * 1000) |round|int }}</td>
+                        <td>{{ request.created_at }}</td>
+                    </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </section>
 
