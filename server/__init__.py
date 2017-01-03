@@ -31,6 +31,202 @@ app.config.from_object(app_settings)
 app.template_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
 
 
+class ErrorResponse(Exception):
+    """Custom Exception class that wraps an error response"""
+    def __init__(self, response):
+        self.response = response
+
+
+class MMERequest:
+    def __init__(self, body, sender_id=None, timeout=10, timestamp=None):
+        assert body and timeout > 0
+        self.body = body
+        self.sender_id = sender_id
+        self.timeout = timeout
+        self.timestamp = datetime.now() if timestamp is None else timestamp
+
+    def get_raw(self):
+        return self.body
+
+    def get_normalized(self):
+        assert self.prepared is not None, 'Request was not normalized'
+        return self.prepared
+
+    def get_sender_id(self):
+        return self.sender_id
+
+    def get_timestamp(self):
+        return self.timestamp
+
+    def get_patient_id(self):
+        return self.get_raw().get('patient', {}).get('id', '')
+
+    def normalize(self):
+        """Normalize the request"""
+        normalized = self._normalize(self.body)
+        # Inject server data in request
+        sender_id = self.get_sender_id()
+        if sender_id:
+            normalized['_server'] = {
+                'server_id': sender_id
+            }
+
+        self.prepared = normalized
+
+    @classmethod
+    def _normalize(cls, raw_request):
+        logger.info('Normalizing request')
+        try:
+            normalized = MatchRequest.from_api(raw_request).to_api()
+        except Exception as e:
+            error = jsonify(message='Error normalizing request: {}'.format(e))
+            error.status_code = 400
+            raise ErrorResponse(error)
+
+        try:
+            logger.info('Validate normalized request')
+            validate_request(normalized)
+        except ValidationError as e:
+            error = jsonify(message='Normalized request does not conform to API specification')
+            error.status_code = 422
+            raise ErrorResponse(error)
+
+        return normalized
+
+    def send(self, server, timeout=10):
+        """Send the request to the given server and return a MMEResponse object
+
+        timeout - terminate the request after this many seconds
+        """
+        server_id = server['server_id']
+        base_url = server['base_url']
+        auth_token = server['server_key']
+        request = self.get_normalized()
+
+        assert server_id and base_url and base_url.startswith('https://') and request
+
+        match_url = '{}/match'.format(base_url)
+        headers = {
+            'User-Agent': USER_AGENT,
+            'Content-Type': API_MIME_TYPE,
+            'Accept': API_MIME_TYPE,
+        }
+
+        # Serialize request
+        request_data = json.dumps(request).encode('utf-8')
+
+        if auth_token:
+            headers['X-Auth-Token'] = auth_token
+            logger.info('Authenticating with: {}...'.format(auth_token[:4]))
+
+        logger.info('Opening request to URL: ' + match_url)
+        logger.info('Sending request: ' + request_data.decode())
+        try:
+            sent_request_at = datetime.now()
+            req = Request(match_url, data=request_data, headers=headers)
+            try:
+                handler = urlopen(req, timeout=timeout)
+                code = handler.getcode()
+                response_body = handler
+            except HTTPError as e:
+                # Handle HTTP Errors thrown for non-200 responses
+                code = e.code
+                response_body = e
+
+            logger.info('Received HTTP {}'.format(code))
+            received_response_at = datetime.now()
+            elapsed_time = (received_response_at - sent_request_at).total_seconds()
+
+            logger.info('Loading response')
+            response_data = response_body.read().decode('utf-8')
+            response = json.loads(response_data)
+        except Exception as e:
+            logger.error('Request resulted in error: {}'.format(e))
+            return MMEResponse(request, {'message': str(e)}, status=500)
+
+        # Inject server information
+        response['_server'] = {
+            'id': server_id,
+            'baseUrl': base_url,
+        }
+
+        return MMEResponse(request, response, status=code, time=elapsed_time)
+
+
+class MMEResponse:
+    def __init__(self, request, body, status=200, time=0):
+        assert request and body
+        self.request = request
+        self.body = body
+        self.status = status
+        self.time = time
+        self.prepared = None
+
+    def normalize(self):
+        """Normalize the response"""
+        if self.status == 200:
+            normalized = self._normalize(self.body)
+
+            # Inject request data into response
+            normalized['_request'] = self.request
+        else:
+            # Just use the raw response directly
+            normalized = self.body
+
+        self.prepared = normalized
+
+    def get_raw(self):
+        return self.body
+
+    def get_normalized(self):
+        assert self.prepared is not None, 'Response was not normalized'
+        return self.prepared
+
+    def get_status(self):
+        return self.status
+
+    def get_time(self):
+        return self.time
+
+    def get_patient_ids(self):
+        pids = []
+        for result in self.get_raw().get('results', []):
+            pid = result.get('patient', {}).get('id', '')
+            pids.append(pid)
+        return pids
+
+    def get_response(self):
+        """Get the HTTP response"""
+        assert self.prepared is not None, 'Response was not normalized'
+        response = jsonify(self.prepared)
+        response.status_code = self.status
+        return response
+
+    @classmethod
+    def _normalize(cls, raw_response):
+        logger.info('Validating response syntax')
+        try:
+            validate_response(raw_response)
+        except ValidationError as e:
+            # log and return response anyway
+            logger.warning('Response does not conform to API specification:\n{}'.format(e))
+
+        try:
+            logger.info('Normalizing response')
+            normalized = MatchResponse.from_api(raw_response).to_api()
+        except Exception as e:
+            # log and return response anyway
+            logger.warning('Error normalizing response:\n{}'.format(e))
+
+        try:
+            validate_response(normalized)
+        except ValidationError as e:
+            # log and return response anyway
+            logger.warning('Normalized response does not conform to API specification:\n{}'.format(e))
+
+        return normalized
+
+
 def get_outgoing_servers():
     """Get a list of outgoing servers"""
     servers = get_server_manager()
@@ -43,8 +239,12 @@ def get_outgoing_servers():
     return servers
 
 
-def get_outgoing_server(server_id):
-    """Get a list of outgoing servers"""
+def get_outgoing_server(server_id, required=False):
+    """Get outgoing server information, given the id
+
+    required - if true, an ErrorResponse will be raised if the server is not found
+    """
+    logger.info('Looking up server: {}'.format(server_id))
     servers = get_server_manager()
     s = servers.index.search()
     s = s.filter('term', server_id=server_id)
@@ -53,6 +253,10 @@ def get_outgoing_server(server_id):
 
     if results.hits:
         return results.hits[0]
+    elif required:
+        error = jsonify(message='Bad server id: {}'.format(server_id))
+        error.status_code = 400
+        raise ErrorResponse(error)
 
 
 def get_recent_requests(n=10):
@@ -64,104 +268,57 @@ def get_recent_requests(n=10):
     return results.hits
 
 
-def log_request(sender_id, raw_request, request, receiver_id, response_code, raw_response, response, request_at, response_time):
+def get_request(flask_request):
+    timeout = int(flask_request.args.get('timeout', 10))
+
+    timestamp = datetime.now()
+
+    sender_id = flask.g.get('server')['server_id']
+
+    try:
+        logger.info('Getting flask request data')
+        request_json = flask_request.get_json(force=True)
+    except BadRequest:
+        error = jsonify(message='Invalid request JSON')
+        error.status_code = 400
+        raise ErrorResponse(error)
+
+    try:
+        logger.info('Validate request syntax')
+        validate_request(request_json)
+    except ValidationError as e:
+        error = jsonify(message='Request does not conform to API specification')
+        error.status_code = 422
+        raise ErrorResponse(error)
+
+    return MMERequest(request_json, sender_id=sender_id, timeout=timeout, timestamp=timestamp)
+
+
+def log_request(request, recipient, response):
     """Store the provided request/response for quality assurance
 
-    sender_id - the sending server id
-    request - a dictionary of the MME request
-    reciever_id - the receiving server id
-    response - a dictionary of the MME response
+    request - a MMERequest object
+    recipient - a server object for the queried server
+    response - a MMEResponse object
     """
     db = get_backend()
-    query_patient_id = request.get('patient', {}).get('id', '')
-    response_patient_ids = []
-    for result in response.get('results', []):
-        pid = result.get('patient', {}).get('id', '')
-        response_patient_ids.append(pid)
-
-    now = datetime.now().isoformat()
     doc = {
-        'sender_id': sender_id,
-        'receiver_id': receiver_id,
-        'query_patient_id': query_patient_id,
-        'response_patient_ids': response_patient_ids,
-        'request': json.dumps(request),
-        'response': json.dumps(response),
-        'created_at': request_at,
-        'status': response_code,
-        'took': response_time,
+        'sender_id': request.get_sender_id(),
+        'receiver_id': recipient['server_id'],
+        'query_patient_id': request.get_patient_id(),
+        'response_patient_ids': response.get_patient_ids(),
+        'raw_request': json.dumps(request.get_raw()),
+        'request': json.dumps(request.get_normalized()),
+        'raw_response': json.dumps(response.get_raw()),
+        'response': json.dumps(response.get_normalized()),
+        'created_at': request.get_timestamp(),
+        'status': response.get_status(),
+        'took': response.get_time(),
     }
     try:
         db._db.index(index=ES_INDEX, doc_type=ES_LOG_TYPE, body=doc)
     except Exception as e:
         logger.warning('Error logging request: {}'.format(e))
-
-
-def send_request(server_id, request, timeout):
-    """Send the request to the given server and return a tuple (status, response, elapsed_time)
-
-    Elapsed time is in decimal seconds
-    Raises TimeoutError if the request takes longer than timeout seconds
-    Status of 0 is returned if an error occured processing the request
-    """
-    headers = {
-        'User-Agent': USER_AGENT,
-        'Content-Type': API_MIME_TYPE,
-        'Accept': API_MIME_TYPE,
-    }
-    code = 0
-    response = {}
-    elapsed_time = 0
-
-    # Serialize request
-    request_data = json.dumps(request).encode('utf-8')
-
-    server = get_outgoing_server(server_id)
-    if not server:
-        error = 'Unable to find server: {}'.format(server_id)
-        logger.error(error)
-        return (code, { 'message': error }, elapsed_time)
-
-    auth_token = server['server_key']
-    if auth_token:
-        headers['X-Auth-Token'] = auth_token
-        logger.info('Authenticating with: {}...'.format(auth_token[:4]))
-
-    base_url = server['base_url']
-    assert base_url.startswith('https://')
-    match_url = '{}/match'.format(base_url)
-
-    logger.info("Opening request to URL: " + match_url)
-    logger.info("Sending request: " + request_data.decode())
-    try:
-        sent_request_at = datetime.now()
-        req = Request(match_url, data=request_data, headers=headers)
-        try:
-            handler = urlopen(req, timeout=timeout)
-            code = handler.getcode()
-            response_body = handler
-        except HTTPError as e:
-            code = e.code
-            response_body = e
-
-        logger.info('Received HTTP {}'.format(code))
-        received_response_at = datetime.now()
-        elapsed_time = (received_response_at - sent_request_at).total_seconds()
-
-        logger.info("Loading response")
-        response_data = response_body.read().decode('utf-8')
-        response = json.loads(response_data)
-    except Exception as e:
-        logger.error('Request resulted in error: {}'.format(e))
-        return (code, { 'message': str(e) }, elapsed_time)
-
-    # Inject server information
-    response['_server'] = {
-        'id': server_id,
-        'baseUrl': base_url,
-    }
-
-    return (code, response, elapsed_time)
 
 
 @app.route('/', methods=['GET'])
@@ -177,77 +334,37 @@ def index():
 @produces(API_MIME_TYPE)
 @auth_token_required()
 def match_server(server_id):
-    """Proxy the match request to server <server>"""
-
+    """Proxy the match request to server with id <server_id>"""
     @after_this_request
     def add_header(response):
         response.headers['Content-Type'] = API_MIME_TYPE
         return response
 
-    timeout = int(flask_request.args.get('timeout', 10))
-    received_request_at = datetime.now()
-
     try:
-        logger.info("Getting flask request data")
-        request_json = flask_request.get_json(force=True)
-    except BadRequest:
-        error = jsonify(message='Invalid request JSON')
-        error.status_code = 400
+        request = get_request(flask_request)
+
+        # Validate the email server only after validating the request
+        server = get_outgoing_server(server_id, required=True)
+
+        request.normalize()
+    except ErrorResponse as error:
+        return error.response
+    except Exception as error:
+        error = jsonify(message='Unexpected error: {}'.format(error))
+        error.status_code = 500
         return error
 
+    # Send request
+    logger.info('Proxying request to {}'.format(server_id))
+    response = request.send(server)
+
+    response.normalize()
+
+    # Log exchange
     try:
-        logger.info("Validate request syntax")
-        validate_request(request_json)
-    except ValidationError as e:
-        error = jsonify(message='Request does not conform to API specification',
-                        request=request_json)
-        error.status_code = 422
-        return error
+        log_request(request, server, response)
+    except Exception as e:
+        logger.warning('Error logging request: {}'.format(e))
 
-    logger.info("Parsing query")
-    request = MatchRequest.from_api(request_json).to_api()
+    return response.get_response()
 
-    # Set server data in request
-    request['_server'] = {
-        'server_id': flask.g.get('server')['server_id']
-    }
-
-    try:
-        validate_request(request)
-    except ValidationError as e:
-        error = jsonify(message='Normalized request does not conform to API specification')
-        error.status_code = 422
-        return error
-
-    logger.info("Proxying request to {}".format(server_id))
-    response_code, response_json, response_duration = send_request(server_id, request, timeout)
-    # Set error code for exchange server errors
-    if response_code == 0:
-        response_code = 500
-
-    # Inject request data into response
-    response_json['_request'] = request
-
-    response = {}
-    if response_code == 200:
-        logger.info("Validating response syntax")
-        try:
-            validate_response(response_json)
-        except ValidationError as e:
-            # log to console and return response anyway
-            logger.warning('Response does not conform to API specification:\n{}'.format(e))
-
-        try:
-            logger.info("Normalizing response")
-            response = MatchResponse.from_api(response_json).to_api()
-        except:
-            # log to console and return raw response
-            logger.warning('Error normalizing response:\n{}'.format(e))
-
-    sender_id = flask.g.get('server')['server_id']
-    log_request(sender_id, request_json, request, server_id, response_code, response_json, response, received_request_at, response_duration)
-
-    # Pass through response code
-    result = jsonify(response)
-    result.status_code = response_code
-    return result
