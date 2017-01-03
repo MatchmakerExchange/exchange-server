@@ -266,6 +266,7 @@ def get_recent_requests(n=10):
     db = get_backend()
     if db._db.indices.exists(index=ES_INDEX):
         s = Search(using=db._db, index=ES_INDEX, doc_type=ES_LOG_TYPE)
+        s = s.filter('term', is_test=False)
         s = s.sort('-created_at')
         s = s[:n]
         results = s.execute()
