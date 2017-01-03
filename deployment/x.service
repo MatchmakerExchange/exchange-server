@@ -7,7 +7,7 @@ User=www-data
 Group=www-data
 WorkingDirectory=/var/www/exchange-server
 Environment="PATH=/var/www/exchange-server/.virtualenv/bin"
-ExecStart=/var/www/exchange-server/.virtualenv/bin/gunicorn --workers 3 --bind localhost:8008 -m 007 wsgi:app
+ExecStart=/var/www/exchange-server/.virtualenv/bin/gunicorn --config /var/www/exchange-server/deployment/gunicorn_config.py wsgi:app
 
 [Install]
 WantedBy=multi-user.target
