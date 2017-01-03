@@ -231,12 +231,12 @@ def get_outgoing_servers():
     """Get a list of outgoing servers"""
     servers = get_server_manager()
     response = servers.list()
-    servers = []
+    outgoing_servers = []
     for server in response.get('rows', []):
         if server.get('direction') == 'out':
-            servers.append(server)
+            outgoing_servers.append(server)
 
-    return servers
+    return outgoing_servers
 
 
 def get_outgoing_server(server_id, required=False):
