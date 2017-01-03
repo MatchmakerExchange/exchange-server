@@ -45,6 +45,9 @@ class MMERequest:
         self.timeout = timeout
         self.timestamp = datetime.now() if timestamp is None else timestamp
 
+    def is_test(self):
+        return bool(self.get_raw().get('patient', {}).get('test'))
+
     def get_raw(self):
         return self.body
 
@@ -309,6 +312,7 @@ def log_request(request, recipient, response):
         'sender_id': request.get_sender_id(),
         'receiver_id': recipient['server_id'],
         'query_patient_id': request.get_patient_id(),
+        'is_test': request.is_test(),
         'response_patient_ids': response.get_patient_ids(),
         'raw_request': json.dumps(request.get_raw()),
         'request': json.dumps(request.get_normalized()),
