@@ -10,28 +10,9 @@
     <header><h1 class="text-center" style="padding-bottom: 25px">The Exchange <small>for Matchmakers</small></h1></header>
     <a href="https://github.com/MatchmakerExchange/reference-server"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://camo.githubusercontent.com/38ef81f8aca64bb9a64448d0d70f1308ef5341ab/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f6461726b626c75655f3132313632312e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png"></a>
     <div class="container">
-        <!-- <section class="row col-sm-10 col-sm-offset-1 col-md-8 col-md-offset-2">
-            <h2 class="text-center">Summary</h2>
-            <div class="panel panel-default">
-                <div class="panel-heading">
-                    Connected Servers
-                </div>
-                <div class="panel-body">
-                    <ol>
-                        <li>Make an authenticated MME API request to this service</li>
-                        <li>If you don't want to query all services, you can specify a subset</li>
-                        <li>Receive a combined response, containing matches from all services</li>
-                    </ol>
-                </div>
-            </div>
-        </section> -->
-
         <section class="row col-sm-10 col-sm-offset-1 col-md-8 col-md-offset-2">
             <h2 class="text-center">Features</h2>
             <div class="panel panel-default">
-                <!-- <div class="panel-heading">
-                    Connected Servers
-                </div> -->
                 <div class="panel-body">
                     <ol>
                         <li>Authenticates the requesting service</li>
@@ -84,23 +65,21 @@
             <h2 class="text-center">Usage</h2>
             <div class="panel panel-default">
                 <div class="panel-body">
-                    <h3>Make a request to a specific server: <code>phenomecentral</code></h3>
-                    <pre>
-curl -X POST \
-    -H 'X-Auth-Token: &lt;your-exchange-server-auth-token&gt;' \
-    -H 'Content-Type: application/vnd.ga4gh.matchmaker.v1.0+json' \
-    -H 'Accept: application/vnd.ga4gh.matchmaker.v1.0+json' \
-    -d '{
-          "patient": {
-            "id":"1",
-            "contact": {"name": "Jane Doe", "href": "mailto:jdoe@example.edu"},
-            "features": [{"id": "HP:0000522"}],
-            "genomicFeatures": [{"gene": {"id": "NGLY1"}}],
-            "test": true
-          }
-        }' \
-    https://x.matchmakerexchange.org/v1/servers/phenomecentral/match
-                    </pre>
+                    <h3>Make a request to a specific server, e.g.: <code>phenomecentral</code></h3>
+                    <pre><code>curl -X POST \
+  -H 'X-Auth-Token: <strong style="color:#c7254e;">&lt;your-exchange-server-auth-token&gt;</strong>' \
+  -H 'Content-Type: application/vnd.ga4gh.matchmaker.v1.0+json' \
+  -H 'Accept: application/vnd.ga4gh.matchmaker.v1.0+json' \
+  -d '{
+      "patient": {
+        "id":"1",
+        "contact": {"name": "Jane Doe", "href": "mailto:jdoe@example.edu"},
+        "features": [{"id": "HP:0000522"}],
+        "genomicFeatures": [{"gene": {"id": "NGLY1"}}],
+        "test": true
+      }
+    }' \
+  https://x.matchmakerexchange.org/v1/servers/<strong style="color:#c7254e;">phenomecentral</strong>/match</code></pre>
                 </div>
             </div>
         </section>
@@ -131,6 +110,7 @@ curl -X POST \
                     </tr>
                     {% endfor %}
                     </tbody>
+                    <caption style="caption-side: bottom">Test requests are hidden from this table.</caption>
                 </table>
             </div>
         </section>
