@@ -261,11 +261,14 @@ def get_outgoing_server(server_id, required=False):
 
 def get_recent_requests(n=10):
     db = get_backend()
-    s = Search(using=db._db, index=ES_INDEX, doc_type=ES_LOG_TYPE)
-    s = s.sort('-created_at')
-    s = s[:n]
-    results = s.execute()
-    return results.hits
+    if db._db.indices.exists(index=ES_INDEX):
+        s = Search(using=db._db, index=ES_INDEX, doc_type=ES_LOG_TYPE)
+        s = s.sort('-created_at')
+        s = s[:n]
+        results = s.execute()
+        return results.hits
+    else:
+        return []
 
 
 def get_request(flask_request):
