@@ -10,17 +10,18 @@ from flask import after_this_request, jsonify, render_template, request as flask
 from flask_negotiate import consumes, produces
 from werkzeug.exceptions import BadRequest
 
-from mme_server.auth import auth_token_required, get_server_manager
-from mme_server.server import app, API_MIME_TYPE, get_backend
+from mme_server.auth import auth_token_required
+from mme_server.backend import get_backend
+from mme_server.server import app, API_MIME_TYPE
 from mme_server.models import MatchRequest, MatchResponse
 from mme_server.schemas import validate_request, validate_response, ValidationError
 
 from .compat import urlopen, HTTPError, Request
+# Import manager to register
+from .managers import StatsManager
 
 VERSION = '0.1'
 USER_AGENT = 'mme-exchange-server/{}'.format(VERSION)
-ES_INDEX = 'exchange'
-ES_LOG_TYPE = 'request'
 
 logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
@@ -230,28 +231,16 @@ class MMEResponse:
         return normalized
 
 
-def get_outgoing_servers():
-    """Get a list of outgoing servers"""
-    servers = get_server_manager()
-    response = servers.list()
-    outgoing_servers = []
-    for server in response.get('rows', []):
-        if server.get('direction') == 'out':
-            outgoing_servers.append(server)
-
-    return outgoing_servers
-
-
 def get_outgoing_server(server_id, required=False):
     """Get outgoing server information, given the id
 
     required - if true, an ErrorResponse will be raised if the server is not found
     """
     logger.info('Looking up server: {}'.format(server_id))
-    servers = get_server_manager()
-    s = servers.index.search()
+    backend = get_backend()
+    servers = backend.get_manager('servers')
+    s = servers.search(doc_type=servers.SERVER_DOC_TYPE)
     s = s.filter('term', server_id=server_id)
-    s = s.filter('term', direction='out')
     results = s.execute()
 
     if results.hits:
@@ -260,19 +249,6 @@ def get_outgoing_server(server_id, required=False):
         error = jsonify(message='Bad server id: {}'.format(server_id))
         error.status_code = 400
         raise ErrorResponse(error)
-
-
-def get_recent_requests(n=10):
-    db = get_backend()
-    if db._db.indices.exists(index=ES_INDEX):
-        s = Search(using=db._db, index=ES_INDEX, doc_type=ES_LOG_TYPE)
-        s = s.filter('term', is_test=False)
-        s = s.sort('-created_at')
-        s = s[:n]
-        results = s.execute()
-        return results.hits
-    else:
-        return []
 
 
 def get_request(flask_request):
@@ -301,40 +277,19 @@ def get_request(flask_request):
     return MMERequest(request_json, sender_id=sender_id, timeout=timeout, timestamp=timestamp)
 
 
-def log_request(request, recipient, response):
-    """Store the provided request/response for quality assurance
-
-    request - a MMERequest object
-    recipient - a server object for the queried server
-    response - a MMEResponse object
-    """
-    db = get_backend()
-    doc = {
-        'sender_id': request.get_sender_id(),
-        'receiver_id': recipient['server_id'],
-        'query_patient_id': request.get_patient_id(),
-        'is_test': request.is_test(),
-        'response_patient_ids': response.get_patient_ids(),
-        'raw_request': json.dumps(request.get_raw()),
-        'request': json.dumps(request.get_normalized()),
-        'raw_response': json.dumps(response.get_raw()),
-        'response': json.dumps(response.get_normalized()),
-        'created_at': request.get_timestamp(),
-        'status': response.get_status(),
-        'took': response.get_time(),
-    }
-    try:
-        db._db.index(index=ES_INDEX, doc_type=ES_LOG_TYPE, body=doc)
-    except Exception as e:
-        logger.warning('Error logging request: {}'.format(e))
-
-
 @app.route('/', methods=['GET'])
 @produces('text/html')
 def index():
-    servers = get_outgoing_servers()
-    recent_requests = get_recent_requests()
-    return render_template('index.html', servers=servers, recent_requests=recent_requests)
+    backend = get_backend()
+    servers = backend.get_manager('servers')
+    incoming_servers = servers.list(direction='in').get('rows', [])
+    outgoing_servers = servers.list(direction='out').get('rows', [])
+    stats = backend.get_manager('stats')
+    recent_requests = stats.get_recent_requests()
+    return render_template('index.html',
+                           outgoing_servers=outgoing_servers,
+                           incoming_servers=incoming_servers,
+                           recent_requests=recent_requests)
 
 
 @app.route('/v1/servers/<server_id>/match', methods=['POST'])
@@ -370,7 +325,9 @@ def match_server(server_id):
 
     # Log exchange
     try:
-        log_request(request, server, response)
+        backend = get_backend()
+        stats = backend.get_manager('stats')
+        stats.save_request(request, server, response)
     except Exception as e:
         logger.warning('Error logging request: {}'.format(e))
 

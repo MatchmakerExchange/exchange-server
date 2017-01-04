@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/github/license/MatchmakerExchange/exchange-server.svg)](LICENSE.txt)
 <!-- [![Coverage Status](https://img.shields.io/coveralls/MatchmakerExchange/exchange-server/master.svg)](https://coveralls.io/github/MatchmakerExchange/exchange-server?branch=master) -->
 
-An exchange server (built on top of the [MME Reference Server](https://github.com/MatchmakerExchange/reference-server)) that proxies requests from one MME service to one or more other MME services over the [Matchmaker Exchange API](https://github.com/ga4gh/mme-apis).
+An exchange server (gateway) built on top of the [MME Reference Server](https://github.com/MatchmakerExchange/reference-server) that proxies requests from one MME service to one or more other MME services over the [Matchmaker Exchange API](https://github.com/ga4gh/mme-apis).
 
 
 ## Dependencies
@@ -29,19 +29,19 @@ An exchange server (built on top of the [MME Reference Server](https://github.co
     pip install -r requirements.txt
     ```
 
-1. Authenticate a server to receive proxied requests:
+1. Authenticate a server to receive requests from the gateway:
 
     ```sh
-    mme-server auth add phenomecentral out  --label "PhenomeCentral" \
-        --base-url "https://phenomecentral.org/rest/remoteMatcher" --key <PC_AUTH_TOKEN>
+    mme-server servers add myserver --label "My Server" \
+        --base-url "https://my-matchmaker-service.org/api/v1" --key <PC_AUTH_TOKEN>
     ```
-    
+
     *Pro-tip: If you don't specify a `--key`, a random one will be generated*
 
-1. Authenticate a client to send proxied requests:
+1. Authenticate a client to send requests to the gateway:
 
     ```sh
-    mme-server auth add client_server in  --label "My Client" --key "<CLIENT_AUTH_TOKEN>"
+    mme-server clients add myclient  --label "My Client" --key "<CLIENT_AUTH_TOKEN>"
     ```
 
     *Pro-tip: If you don't specify a `--key`, a random one will be generated*
@@ -65,7 +65,7 @@ An exchange server (built on top of the [MME Reference Server](https://github.co
         "features":[{"id":"HP:0000522"}],
         "genomicFeatures":[{"gene":{"id":"NGLY1"}}],
         "test": true
-      }}' localhost:8000/v1/servers/phenomecentral/match
+      }}' localhost:8000/v1/servers/myserver/match
     ```
 
 
