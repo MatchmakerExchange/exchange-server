@@ -4,6 +4,7 @@ import logging
 import json
 import flask
 
+from collections import defaultdict
 from datetime import datetime
 from elasticsearch_dsl import Search
 from flask import after_this_request, jsonify, render_template, request as flask_request
@@ -34,17 +35,24 @@ app.template_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), '
 
 class ErrorResponse(Exception):
     """Custom Exception class that wraps an error response"""
-    def __init__(self, response):
-        self.response = response
+    def __init__(self, message, status=500):
+        self.message = message
+        self.status = status
+
+    def get_response(self):
+        data = { 'message': self.message }
+        response = jsonify(**data)
+        response.status_code = self.status
+        return response
 
 
 class MMERequest:
-    def __init__(self, body, sender_id=None, timeout=10, timestamp=None):
-        assert body and timeout > 0
+    def __init__(self, body, sender_id=None, timestamp=None):
+        assert body
         self.body = body
         self.sender_id = sender_id
-        self.timeout = timeout
         self.timestamp = datetime.now() if timestamp is None else timestamp
+        self.normalize()
 
     def is_test(self):
         return bool(self.get_raw().get('patient', {}).get('test'))
@@ -71,8 +79,8 @@ class MMERequest:
         # Inject server data in request
         sender_id = self.get_sender_id()
         if sender_id:
-            normalized['_server'] = {
-                'server_id': sender_id
+            normalized['_client'] = {
+                'id': sender_id
             }
 
         self.prepared = normalized
@@ -83,17 +91,13 @@ class MMERequest:
         try:
             normalized = MatchRequest.from_api(raw_request).to_api()
         except Exception as e:
-            error = jsonify(message='Error normalizing request: {}'.format(e))
-            error.status_code = 400
-            raise ErrorResponse(error)
+            raise ErrorResponse('Error normalizing request: {}'.format(e), status=400)
 
         try:
             logger.info('Validate normalized request')
             validate_request(normalized)
         except ValidationError as e:
-            error = jsonify(message='Normalized request does not conform to API specification')
-            error.status_code = 422
-            raise ErrorResponse(error)
+            raise ErrorResponse('Normalized request does not conform to API specification: {}'.format(e), status=422)
 
         return normalized
 
@@ -107,7 +111,7 @@ class MMERequest:
         auth_token = server['server_key']
         request = self.get_normalized()
 
-        assert server_id and base_url and base_url.startswith('https://') and request
+        assert server_id and base_url and request
 
         match_url = '{}/match'.format(base_url)
         headers = {
@@ -246,35 +250,28 @@ def get_outgoing_server(server_id, required=False):
     if results.hits:
         return results.hits[0]
     elif required:
-        error = jsonify(message='Bad server id: {}'.format(server_id))
-        error.status_code = 400
-        raise ErrorResponse(error)
+        raise ErrorResponse('Bad server id: {}'.format(server_id), status=400)
 
 
 def get_request(flask_request):
-    timeout = int(flask_request.args.get('timeout', 10))
-
     timestamp = datetime.now()
 
-    sender_id = flask.g.get('server')['server_id']
+    sender = flask.g.get('server', defaultdict(lambda: None))
+    sender_id = sender['server_id']
 
     try:
         logger.info('Getting flask request data')
         request_json = flask_request.get_json(force=True)
     except BadRequest:
-        error = jsonify(message='Invalid request JSON')
-        error.status_code = 400
-        raise ErrorResponse(error)
+        raise ErrorResponse('Invalid request JSON', status=400)
 
     try:
         logger.info('Validate request syntax')
         validate_request(request_json)
     except ValidationError as e:
-        error = jsonify(message='Request does not conform to API specification')
-        error.status_code = 422
-        raise ErrorResponse(error)
+        raise ErrorResponse('Request does not conform to API specification: {}'.format(e), status=422)
 
-    return MMERequest(request_json, sender_id=sender_id, timeout=timeout, timestamp=timestamp)
+    return MMERequest(request_json, sender_id=sender_id, timestamp=timestamp)
 
 
 @app.route('/', methods=['GET'])
@@ -293,8 +290,8 @@ def index():
 
 
 @app.route('/v1/servers/<server_id>/match', methods=['POST'])
-@consumes(API_MIME_TYPE, 'application/json')
-@produces(API_MIME_TYPE)
+@consumes(API_MIME_TYPE)
+@produces(API_MIME_TYPE, 'application/json')
 @auth_token_required()
 def match_server(server_id):
     """Proxy the match request to server with id <server_id>"""
@@ -306,20 +303,18 @@ def match_server(server_id):
     try:
         request = get_request(flask_request)
 
-        # Validate the email server only after validating the request
         server = get_outgoing_server(server_id, required=True)
 
-        request.normalize()
     except ErrorResponse as error:
-        return error.response
+        return error.get_response()
     except Exception as error:
-        error = jsonify(message='Unexpected error: {}'.format(error))
-        error.status_code = 500
-        return error
+        error = ErrorResponse('Unexpected error: {}'.format(error), status=500)
+        return error.get_response()
 
     # Send request
     logger.info('Proxying request to {}'.format(server_id))
-    response = request.send(server)
+    timeout = int(flask_request.args.get('timeout', 20))
+    response = request.send(server, timeout=timeout)
 
     response.normalize()
 
@@ -333,3 +328,27 @@ def match_server(server_id):
 
     return response.get_response()
 
+
+@app.route('/v1/validate/match', methods=['POST'])
+@consumes(API_MIME_TYPE, 'application/json')
+@produces(API_MIME_TYPE, 'application/json')
+def normalize_match_request():
+    """Validates and normalizes a match request"""
+    @after_this_request
+    def add_header(response):
+        response.headers['Content-Type'] = API_MIME_TYPE
+        return response
+
+    try:
+        request = get_request(flask_request)
+
+        normalized = request.get_normalized()
+
+    except ErrorResponse as error:
+        return error.get_response()
+    except Exception as error:
+        error = ErrorResponse('Unexpected error: {}'.format(error), status=500)
+        return error.get_response()
+
+    response = jsonify(normalized)
+    return response

@@ -2,29 +2,33 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>The Exchange for Matchmaker Services</title>
+    <title>The Matchmaker Exchange Gateway</title>
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
 </head>
 <body>
-    <header><h1 class="text-center" style="padding-bottom: 25px">The Exchange <small>for Matchmakers</small></h1></header>
+    <header><h1 class="text-center" style="padding-bottom: 25px">The Matchmaker Exchange Gateway</h1></header>
     <a href="https://github.com/MatchmakerExchange/reference-server"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://camo.githubusercontent.com/38ef81f8aca64bb9a64448d0d70f1308ef5341ab/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f6461726b626c75655f3132313632312e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png"></a>
     <div class="container">
         <section class="row col-sm-10 col-sm-offset-1 col-md-8 col-md-offset-2">
-            <h2 class="text-center">Features</h2>
+            <h2 class="text-center">Endpoints</h2>
             <div class="panel panel-default">
                 <div class="panel-body">
-                    <ol>
-                        <li>Authenticates the requesting service</li>
-                        <li>Validates requests and responses conform to the <a href="https://github.com/MatchmakerExchange/reference-server/blob/master/mme_server/schemas/api.json">the MME API jsonschema specification</a></li>
-                        <li>Normalizes request and response ontology terms:
-                            <ul>
-                                <li>maps gene symbols and Entrez IDs to Ensembl IDs</li>
-                                <li>resolves HPO synonyms</li>
-                            </ul>
-                        <li>Enables new services to be queried by the entire MME with only a single key exchange</li>
-                        <li>Community-driven analytics</li>
-                    </ol>
+                    Public:
+                    <ul>
+                        <li><code>/v1/validate/match</code> - Validate and normalize a request</li>
+                    </ul>
+
+                    Authenticated clients:
+                    <ul>
+                        <li><code>/v1/servers/&lt;server_id&gt;/match</code> - Send a request to a server</li>
+                    </ul>
+
+
+                    Authenticated servers:
+                    <ul>
+                        <li>Receive requests from authenticated clients, with <code>_client</code> field added to request</li>
+                    </ul>
                 </div>
             </div>
         </section>
@@ -83,9 +87,112 @@
 
         <section class="row col-sm-10 col-sm-offset-1 col-md-8 col-md-offset-2">
             <h2 class="text-center">Usage</h2>
+
+            <h3>Validate and normalize a request</h3>
             <div class="panel panel-default">
                 <div class="panel-body">
-                    <h3>Make a request to a specific server, e.g.: <code>phenomecentral</code></h3>
+                    <p>Endpoint: <code>/v1/validate/match</code></p>
+
+                    <p>On receiving a request, the gateway:</p>
+                    <ol>
+                        <li>Validates that the request conforms to <a href="https://github.com/MatchmakerExchange/reference-server/blob/master/mme_server/schemas/api.json">the MME API jsonschema specification</a> and normalizes the ontology terms:</li>
+                            <ul>
+                                <li>maps gene symbols and Entrez IDs to Ensembl IDs</li>
+                                <li>resolves HPO synonyms</li>
+                            </ul>
+                        <li>Returns the normalized request to the client</li>
+                    </ol>
+
+                    <h4>Example: a valid request</h4>
+                    <p>Request:</p>
+                    <pre><code>curl -X POST \
+  -H 'Content-Type: application/vnd.ga4gh.matchmaker.v1.0+json' \
+  -H 'Accept: application/vnd.ga4gh.matchmaker.v1.0+json' \
+  -d '{
+      "patient": {
+        "id":"1",
+        "contact": {"name": "Jane Doe", "href": "mailto:jdoe@example.edu"},
+        "features": [{"id": "HP:0000522"}],
+        "genomicFeatures": [{"gene": {"id": "NGLY1"}}]
+      }
+    }' \
+  https://gateway.matchmakerexchange.org/v1/validate/match</code></pre>
+                    <p>Response:</p>
+                    <pre><code>HTTP/1.0 200 OK
+Content-Type: application/vnd.ga4gh.matchmaker.v1.0+json
+
+{
+  "patient": {
+    "contact": {
+      "href": "mailto:jdoe@example.edu",
+      "name": "Jane Doe"
+    },
+    "features": [
+      {
+        "id": "HP:0000522",
+        "label": "Alacrima",
+        "observed": "yes"
+      }
+    ],
+    "genomicFeatures": [
+      {
+        "gene": {
+          "id": "ENSG00000151092",
+          "label": [
+            "N-glycanase 1"
+          ]
+        }
+      }
+    ],
+    "id": "1"
+  }
+}</code></pre>
+
+                    <h4>Example: an invalid request</h4>
+                    <p>Request:</p>
+                    <pre><code>curl -X POST \
+  -H 'Content-Type: application/vnd.ga4gh.matchmaker.v1.0+json' \
+  -H 'Accept: application/vnd.ga4gh.matchmaker.v1.0+json' \
+  -d '{
+      "patient": {
+        "id":"1",
+        "contact": {"name": "Jane Doe"},
+        "features": [{"id": "HP:0000522"}]
+      }
+    }' \
+  https://gateway.matchmakerexchange.org/v1/validate/match</code></pre>
+                    <p>Response:</p>
+                    <pre><code>HTTP/1.0 422 UNPROCESSABLE ENTITY
+Content-Type: application/vnd.ga4gh.matchmaker.v1.0+json
+
+{
+  "message": "Request does not conform to API specification: 'href' is a required property\n\nFailed validating 'required' in schema['properties']['patient']['properties']['contact']:\n    {'properties': {'href': {'format': 'uri', 'type': 'string'},\n                    'institution': {'type': 'string'},\n                    'name': {'type': 'string'}},\n     'required': ['name', 'href'],\n     'type': 'object'}\n\nOn instance['patient']['contact']:\n    {'name': 'Jane Doe'}"
+}</code></pre>
+                </div>
+            </div>
+
+            <h3>Make a request to a specific server</h3>
+            <div class="panel panel-default">
+                <div class="panel-body">
+                    <p>Endpoint: <code>/v1/servers/&lt;server_id&gt;/match</code></p>
+
+                    <p>On receiving a request, the gateway:</p>
+                    <ol>
+                        <li>Authenticates the requesting client by verifying the <code>X-Auth-Token</code> header</li>
+                            <ul>
+                                <li>Adds a <code>_client</code> field to request JSON
+                            </ul>
+                        <li>Validates that the request conforms to <a href="https://github.com/MatchmakerExchange/reference-server/blob/master/mme_server/schemas/api.json">the MME API jsonschema specification</a> and normalizes the ontology terms:</li>
+                            <ul>
+                                <li>maps gene symbols and Entrez IDs to Ensembl IDs</li>
+                                <li>resolves HPO synonyms</li>
+                            </ul>
+                        <li>Sends the request to the specified server and normalizes the ontology terms in the response</li>
+                        <li>Logs the exchange for MME analytics</li>
+                        <li>Returns the normalized response to the client</li>
+                    </ol>
+
+                    <p>For example, to send a request to <code>phenomecentral</code>:</p>
                     <pre><code>curl -X POST \
   -H 'X-Auth-Token: <strong style="color:#c7254e;">&lt;your-exchange-server-auth-token&gt;</strong>' \
   -H 'Content-Type: application/vnd.ga4gh.matchmaker.v1.0+json' \
