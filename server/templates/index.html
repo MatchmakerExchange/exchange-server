@@ -35,7 +35,7 @@
 
                     Authenticated servers:
                     <ul>
-                        <li>Receive requests from authenticated clients, with <code>_client</code> field added to request</li>
+                        <li>Receive requests from authenticated clients, with <code>X-Forwarded-For</code> header set to the client id</li>
                     </ul>
                 </div>
             </div>
@@ -187,22 +187,25 @@ Content-Type: application/vnd.ga4gh.matchmaker.v1.0+json
                     <p>On receiving a request, the gateway:</p>
                     <ol>
                         <li>Authenticates the requesting client by verifying the <code>X-Auth-Token</code> header</li>
-                            <ul>
-                                <li>Adds a <code>_client</code> field to request JSON
-                            </ul>
                         <li>Validates that the request conforms to <a href="https://github.com/MatchmakerExchange/reference-server/blob/master/mme_server/schemas/api.json">the MME API jsonschema specification</a> and normalizes the ontology terms:</li>
                             <ul>
                                 <li>maps gene symbols and Entrez IDs to Ensembl IDs</li>
                                 <li>resolves HPO synonyms</li>
                             </ul>
                         <li>Sends the request to the specified server and normalizes the ontology terms in the response</li>
+                            <ul>
+                                <li>The <code>X-Forwarded-For</code> header is set to the id of the authenticated client
+                            </ul>
                         <li>Logs the exchange for MME analytics</li>
                         <li>Returns the normalized response to the client</li>
+                            <ul>
+                                <li>The request that was sent to the server is provided in the <code>_request</code> field of the response
+                            </ul>
                     </ol>
 
                     <p>For example, to send a request to <code>phenomecentral</code>:</p>
                     <pre><code>curl -X POST \
-  -H 'X-Auth-Token: <strong style="color:#c7254e;">&lt;your-exchange-server-auth-token&gt;</strong>' \
+  -H 'X-Auth-Token: <strong style="color:#c7254e;">&lt;your-gateway-client-token&gt;</strong>' \
   -H 'Content-Type: application/vnd.ga4gh.matchmaker.v1.0+json' \
   -H 'Accept: application/vnd.ga4gh.matchmaker.v1.0+json' \
   -d '{
@@ -215,6 +218,44 @@ Content-Type: application/vnd.ga4gh.matchmaker.v1.0+json
       }
     }' \
   https://gateway.matchmakerexchange.org/v1/servers/<strong style="color:#c7254e;">phenomecentral</strong>/match</code></pre>
+
+                    <p>PhenomeCentral would then receive the following request:
+                    <pre><code>
+POST /rest/remoteMatcher/match HTTP/1.1
+Host: phenomecentral.org
+Content-Type: application/vnd.ga4gh.matchmaker.v1.0+json
+Accept: application/vnd.ga4gh.matchmaker.v1.0+json
+X-Forwarded-For: <strong style="color:#c7254e;">&lt;your-client-id&gt;</strong>
+X-Auth-Token: <strong style="color:#c7254e;">&lt;phenomecentrals-gateway-server-token&gt;</strong>
+
+{
+  "patient": {
+    "contact": {
+      "href": "mailto:jdoe@example.edu",
+      "name": "Jane Doe"
+    },
+    "features": [
+      {
+        "id": "HP:0000522",
+        "label": "Alacrima",
+        "observed": "yes"
+      }
+    ],
+    "genomicFeatures": [
+      {
+        "gene": {
+          "id": "ENSG00000151092",
+          "label": [
+            "N-glycanase 1"
+          ]
+        }
+      }
+    ],
+    "id": "1",
+    "test": true
+  }
+}
+</code></pre>
                 </div>
             </div>
         </section>

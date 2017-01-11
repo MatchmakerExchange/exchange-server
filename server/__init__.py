@@ -75,15 +75,7 @@ class MMERequest:
 
     def normalize(self):
         """Normalize the request"""
-        normalized = self._normalize(self.body)
-        # Inject server data in request
-        sender_id = self.get_sender_id()
-        if sender_id:
-            normalized['_client'] = {
-                'id': sender_id
-            }
-
-        self.prepared = normalized
+        return self._normalize(self.body)
 
     @classmethod
     def _normalize(cls, raw_request):
@@ -110,14 +102,17 @@ class MMERequest:
         base_url = server['base_url']
         auth_token = server['server_key']
         request = self.get_normalized()
+        sender_id = self.get_sender_id()
 
-        assert server_id and base_url and request
+        assert sender_id and server_id and base_url and request
 
         match_url = '{}/match'.format(base_url)
         headers = {
             'User-Agent': USER_AGENT,
             'Content-Type': API_MIME_TYPE,
             'Accept': API_MIME_TYPE,
+            # Set the header for the authenticated client id
+            'X-Forwarded-For': sender_id,
         }
 
         # Serialize request
@@ -151,12 +146,6 @@ class MMERequest:
         except Exception as e:
             logger.error('Request resulted in error: {}'.format(e))
             return MMEResponse(request, {'message': str(e)}, status=500)
-
-        # Inject server information
-        response['_server'] = {
-            'id': server_id,
-            'baseUrl': base_url,
-        }
 
         return MMEResponse(request, response, status=code, time=elapsed_time)
 
