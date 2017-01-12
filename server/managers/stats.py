@@ -7,6 +7,8 @@ from __future__ import with_statement, division, unicode_literals
 import json
 import logging
 
+from base64 import b64encode
+
 from mme_server.managers.base import BaseManager
 from mme_server.managers import Managers
 
@@ -39,21 +41,13 @@ class StatsManager(BaseManager):
                         'type': 'string',
                         'index': 'not_analyzed',
                     },
-                    'raw_request': {
-                        'type': 'string',
-                        'index': 'not_analyzed',
-                    },
                     'request': {
-                        'type': 'string',
-                        'index': 'not_analyzed',
-                    },
-                    'raw_response': {
-                        'type': 'string',
-                        'index': 'not_analyzed',
+                        'type': 'binary',
+                        'doc_values': False,
                     },
                     'response': {
-                        'type': 'string',
-                        'index': 'not_analyzed',
+                        'type': 'binary',
+                        'doc_values': False,
                     },
                     'created_at': {
                         'type': 'date',
@@ -81,6 +75,10 @@ class StatsManager(BaseManager):
         else:
             return []
 
+    @classmethod
+    def _object_to_blob(cls, object):
+        return b64encode(json.dumps(object).encode('utf-8')).decode()
+
     def save_request(self, request, recipient, response):
         """Store the provided request/response for quality assurance
 
@@ -94,10 +92,8 @@ class StatsManager(BaseManager):
             'query_patient_id': request.get_patient_id(),
             'is_test': request.is_test(),
             'response_patient_ids': response.get_patient_ids(),
-            'raw_request': json.dumps(request.get_raw()),
-            'request': json.dumps(request.get_normalized()),
-            'raw_response': json.dumps(response.get_raw()),
-            'response': json.dumps(response.get_normalized()),
+            'request': self._object_to_blob(request.get_raw()),
+            'response': self._object_to_blob(response.get_raw()),
             'created_at': request.get_timestamp(),
             'status': response.get_status(),
             'took': response.get_time(),
