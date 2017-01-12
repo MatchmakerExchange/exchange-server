@@ -8,7 +8,7 @@
 </head>
 <body>
     <header><h1 class="text-center" style="padding-bottom: 25px">The Matchmaker Exchange Gateway</h1></header>
-    <a href="https://github.com/MatchmakerExchange/reference-server"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://camo.githubusercontent.com/38ef81f8aca64bb9a64448d0d70f1308ef5341ab/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f6461726b626c75655f3132313632312e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png"></a>
+    <a href="https://github.com/MatchmakerExchange/exchange-server"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://camo.githubusercontent.com/38ef81f8aca64bb9a64448d0d70f1308ef5341ab/68747470733a2f2f73332e616d617a6f6e6177732e636f6d2f6769746875622f726962626f6e732f666f726b6d655f72696768745f6461726b626c75655f3132313632312e706e67" alt="Fork me on GitHub" data-canonical-src="https://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png"></a>
 
     <div class="container">
 
@@ -48,22 +48,22 @@
                     <thead>
                     <tr>
                         <th>#</th>
-                        <th>Server ID</th>
                         <th>Server Name</th>
+                        <th>Server ID</th>
                         <th>Base URL</th>
                     </tr>
                     </thead>
                     <tbody>
-                    {% for server in outgoing_servers|sort(attribute='server_id') %}
+                    {% for server in outgoing_servers|sort(attribute='server_label') %}
                     <tr>
                         <td>{{ loop.index }}</td>
-                        <td>{{ server.server_id }}</td>
                         <td>{{ server.server_label }}</td>
+                        <td>{{ server.server_id }}</td>
                         <td>{{ server.base_url }}</td>
                     </tr>
                     {% endfor %}
                     </tbody>
-                    <caption style="caption-side: bottom">To request a server be added to this list, just <a href="https://github.com/MatchmakerExchange/reference-server/issues/new">create an issue</a>.</caption>
+                    <caption style="caption-side: bottom">To request a server be added to this list, just <a href="https://github.com/MatchmakerExchange/exchange-server/issues/new">create an issue</a>.</caption>
                 </table>
             </div>
         </section>
@@ -75,20 +75,20 @@
                     <thead>
                     <tr>
                         <th>#</th>
-                        <th>Client ID</th>
                         <th>Client Name</th>
+                        <th>Client ID</th>
                     </tr>
                     </thead>
                     <tbody>
-                    {% for server in incoming_servers|sort(attribute='server_id') %}
+                    {% for client in incoming_servers|sort(attribute='server_label') %}
                     <tr>
                         <td>{{ loop.index }}</td>
-                        <td>{{ server.server_id }}</td>
-                        <td>{{ server.server_label }}</td>
+                        <td>{{ client.server_label }}</td>
+                        <td>{{ client.server_id }}</td>
                     </tr>
                     {% endfor %}
                     </tbody>
-                    <caption style="caption-side: bottom">To request a client be added to this list, just <a href="https://github.com/MatchmakerExchange/reference-server/issues/new">create an issue</a>.</caption>
+                    <caption style="caption-side: bottom">To request a client be added to this list, just <a href="https://github.com/MatchmakerExchange/exchange-server/issues/new">create an issue</a>.</caption>
                 </table>
             </div>
         </section>
@@ -146,9 +146,7 @@ Content-Type: application/vnd.ga4gh.matchmaker.v1.0+json
       {
         "gene": {
           "id": "ENSG00000151092",
-          "label": [
-            "N-glycanase 1"
-          ]
+          "label": "N-glycanase 1"
         }
       }
     ],
@@ -203,7 +201,7 @@ Content-Type: application/vnd.ga4gh.matchmaker.v1.0+json
                             </ul>
                     </ol>
 
-                    <p>For example, to send a request to <code>phenomecentral</code>:</p>
+                    <p>For example, to send a request to the server with an id of <code>phenomecentral.org</code>:</p>
                     <pre><code>curl -X POST \
   -H 'X-Auth-Token: <strong style="color:#c7254e;">&lt;your-gateway-client-token&gt;</strong>' \
   -H 'Content-Type: application/vnd.ga4gh.matchmaker.v1.0+json' \
@@ -217,7 +215,7 @@ Content-Type: application/vnd.ga4gh.matchmaker.v1.0+json
         "test": true
       }
     }' \
-  https://gateway.matchmakerexchange.org/v1/servers/<strong style="color:#c7254e;">phenomecentral</strong>/match</code></pre>
+  https://gateway.matchmakerexchange.org/v1/servers/<strong style="color:#c7254e;">phenomecentral.org</strong>/match</code></pre>
 
                     <p>PhenomeCentral would then receive the following request:
                     <pre><code>
@@ -245,9 +243,7 @@ X-Auth-Token: <strong style="color:#c7254e;">&lt;phenomecentrals-gateway-server-
       {
         "gene": {
           "id": "ENSG00000151092",
-          "label": [
-            "N-glycanase 1"
-          ]
+          "label": "N-glycanase 1"
         }
       }
     ],
