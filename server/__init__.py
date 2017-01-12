@@ -52,7 +52,7 @@ class MMERequest:
         self.body = body
         self.sender_id = sender_id
         self.timestamp = datetime.now() if timestamp is None else timestamp
-        self.normalize()
+        self.prepared = self._normalize_request(body)
 
     def is_test(self):
         return bool(self.get_raw().get('patient', {}).get('test'))
@@ -73,12 +73,8 @@ class MMERequest:
     def get_patient_id(self):
         return self.get_raw().get('patient', {}).get('id', '')
 
-    def normalize(self):
-        """Normalize the request"""
-        return self._normalize(self.body)
-
     @classmethod
-    def _normalize(cls, raw_request):
+    def _normalize_request(cls, raw_request):
         logger.info('Normalizing request')
         try:
             normalized = MatchRequest.from_api(raw_request).to_api()
@@ -157,12 +153,12 @@ class MMEResponse:
         self.body = body
         self.status = status
         self.time = time
-        self.prepared = None
+        self.prepared = self._normalize()
 
-    def normalize(self):
+    def _normalize(self):
         """Normalize the response"""
         if self.status == 200:
-            normalized = self._normalize(self.body)
+            normalized = self._normalize_response(self.body)
 
             # Inject request data into response
             normalized['_request'] = self.request
@@ -170,7 +166,7 @@ class MMEResponse:
             # Just use the raw response directly
             normalized = self.body
 
-        self.prepared = normalized
+        return normalized
 
     def get_raw(self):
         return self.body
@@ -200,7 +196,7 @@ class MMEResponse:
         return response
 
     @classmethod
-    def _normalize(cls, raw_response):
+    def _normalize_response(cls, raw_response):
         logger.info('Validating response syntax')
         try:
             validate_response(raw_response)
@@ -304,8 +300,6 @@ def match_server(server_id):
     logger.info('Proxying request to {}'.format(server_id))
     timeout = int(flask_request.args.get('timeout', 20))
     response = request.send(server, timeout=timeout)
-
-    response.normalize()
 
     # Log exchange
     try:
