@@ -50,7 +50,7 @@
                         <th>#</th>
                         <th>Server Name</th>
                         <th>Server ID</th>
-                        <th>Base URL</th>
+                        <th>Endpoint</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -59,7 +59,7 @@
                         <td>{{ loop.index }}</td>
                         <td>{{ server.server_label }}</td>
                         <td>{{ server.server_id }}</td>
-                        <td>{{ server.base_url }}</td>
+                        <td>/v1/servers/{{ server.server_id }}/match</td>
                     </tr>
                     {% endfor %}
                     </tbody>
