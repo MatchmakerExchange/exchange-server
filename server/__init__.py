@@ -24,7 +24,6 @@ from .managers import StatsManager
 VERSION = '0.1'
 USER_AGENT = 'mme-exchange-server/{}'.format(VERSION)
 
-logging.basicConfig(level='INFO')
 logger = logging.getLogger(__name__)
 
 # Default to development configuration
@@ -73,6 +72,21 @@ class MMERequest:
     def get_patient_id(self):
         return self.get_raw().get('patient', {}).get('id', '')
 
+    def get_headers(self, auth_token=None):
+        sender_id = self.get_sender_id()
+        headers = {
+            'User-Agent': USER_AGENT,
+            'Content-Type': API_MIME_TYPE,
+            'Accept': API_MIME_TYPE,
+            # Set the header for the authenticated client id
+            'X-Forwarded-For': sender_id,
+        }
+        if auth_token:
+            headers['X-Auth-Token'] = auth_token
+            logger.debug('Authenticating with: {}...'.format(auth_token[:4]))
+
+        return  headers
+
     @classmethod
     def _normalize_request(cls, raw_request):
         logger.info('Normalizing request')
@@ -97,30 +111,20 @@ class MMERequest:
         server_id = server['server_id']
         base_url = server['base_url']
         auth_token = server['server_key']
-        request = self.get_normalized()
-        sender_id = self.get_sender_id()
 
-        assert sender_id and server_id and base_url and request
+        assert server_id and base_url
 
         match_url = '{}/match'.format(base_url)
-        headers = {
-            'User-Agent': USER_AGENT,
-            'Content-Type': API_MIME_TYPE,
-            'Accept': API_MIME_TYPE,
-            # Set the header for the authenticated client id
-            'X-Forwarded-For': sender_id,
-        }
 
-        # Serialize request
-        request_data = json.dumps(request).encode('utf-8')
-
-        if auth_token:
-            headers['X-Auth-Token'] = auth_token
-            logger.info('Authenticating with: {}...'.format(auth_token[:4]))
+        headers = self.get_headers(auth_token=auth_token)
 
         logger.info('Opening request to URL: ' + match_url)
-        logger.info('Sending request: ' + request_data.decode())
         try:
+            request = self.get_normalized()
+
+            # Serialize request
+            request_data = json.dumps(request).encode('utf-8')
+
             sent_request_at = datetime.now()
             req = Request(match_url, data=request_data, headers=headers)
             try:
@@ -153,20 +157,7 @@ class MMEResponse:
         self.body = body
         self.status = status
         self.time = time
-        self.prepared = self._normalize()
-
-    def _normalize(self):
-        """Normalize the response"""
-        if self.status == 200:
-            normalized = self._normalize_response(self.body)
-
-            # Inject request data into response
-            normalized['_request'] = self.request
-        else:
-            # Just use the raw response directly
-            normalized = self.body
-
-        return normalized
+        self.prepared = self._normalize_response(body, status=status, request=request)
 
     def get_raw(self):
         return self.body
@@ -196,7 +187,11 @@ class MMEResponse:
         return response
 
     @classmethod
-    def _normalize_response(cls, raw_response):
+    def _normalize_response(cls, raw_response, status=200, request=None):
+        if status != 200:
+            # Just use the raw response directly
+            return raw_response
+
         logger.info('Validating response syntax')
         try:
             validate_response(raw_response)
@@ -216,6 +211,10 @@ class MMEResponse:
         except ValidationError as e:
             # log and return response anyway
             logger.warning('Normalized response does not conform to API specification:\n{}'.format(e))
+
+        if request:
+            # Inject request data into response
+            normalized['_request'] = request
 
         return normalized
 
@@ -286,20 +285,19 @@ def match_server(server_id):
         return response
 
     try:
+        timeout = int(flask_request.args.get('timeout', 20))
+
         request = get_request(flask_request)
 
         server = get_outgoing_server(server_id, required=True)
+
+        response = request.send(server, timeout=timeout)
 
     except ErrorResponse as error:
         return error.get_response()
     except Exception as error:
         error = ErrorResponse('Unexpected error: {}'.format(error), status=500)
         return error.get_response()
-
-    # Send request
-    logger.info('Proxying request to {}'.format(server_id))
-    timeout = int(flask_request.args.get('timeout', 20))
-    response = request.send(server, timeout=timeout)
 
     # Log exchange
     try:

@@ -43,7 +43,7 @@ def parse_args(args):
 
 
 def main(args=sys.argv[1:]):
-    logging.basicConfig(level='INFO')
+    logging.basicConfig(level='WARNING')
     args = parse_args(args)
 
     # Call the function for the corresponding subparser
