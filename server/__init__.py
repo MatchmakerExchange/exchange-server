@@ -44,6 +44,9 @@ class ErrorResponse(Exception):
         response.status_code = self.status
         return response
 
+    def __str__(self):
+        return '[HTTP {}]: {}'.format(self.status, self.message)
+
 
 class MMERequest:
     def __init__(self, body, sender_id=None, timestamp=None):
@@ -294,8 +297,10 @@ def match_server(server_id):
         response = request.send(server, timeout=timeout)
 
     except ErrorResponse as error:
+        logger.error('Error response: {}'.format(error))
         return error.get_response()
     except Exception as error:
+        logger.exception()
         error = ErrorResponse('Unexpected error: {}'.format(error), status=500)
         return error.get_response()
 
@@ -304,8 +309,8 @@ def match_server(server_id):
         backend = get_backend()
         stats = backend.get_manager('stats')
         stats.save_request(request, server, response)
-    except Exception as e:
-        logger.warning('Error logging request: {}'.format(e))
+    except Exception as error:
+        logger.warning('Error logging request: {}'.format(error))
 
     return response.get_response()
 
@@ -326,8 +331,10 @@ def normalize_match_request():
         normalized = request.get_normalized()
 
     except ErrorResponse as error:
+        logger.error('Error response: {}'.format(error))
         return error.get_response()
     except Exception as error:
+        logger.exception()
         error = ErrorResponse('Unexpected error: {}'.format(error), status=500)
         return error.get_response()
 
