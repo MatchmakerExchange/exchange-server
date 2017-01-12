@@ -56,14 +56,13 @@ class StatsManager(BaseManager):
                         'index': 'not_analyzed',
                     },
                     'created_at': {
-                        'type': 'string',
-                        'index': 'not_analyzed',
+                        'type': 'date',
                     },
                     'status': {
                         'type': 'integer',
                     },
                     'took': {
-                        'type': 'date',
+                        'type': 'float',
                     },
                 }
             }
