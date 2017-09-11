@@ -1,4 +1,4 @@
-# Matchmaker Exchange Reference Server
+# Matchmaker Exchange Gateway (Exchange) Server
 <!-- [![Build Status](https://api.travis-ci.org/MatchmakerExchange/exchange-server.svg)](https://travis-ci.org/MatchmakerExchange/exchange-server) -->
 [![License](https://img.shields.io/github/license/MatchmakerExchange/exchange-server.svg)](LICENSE.txt)
 <!-- [![Coverage Status](https://img.shields.io/coveralls/MatchmakerExchange/exchange-server/master.svg)](https://coveralls.io/github/MatchmakerExchange/exchange-server?branch=master) -->
